@@ -9,7 +9,9 @@ are being random:
   - FrequencyPredictor        : people over-favor one move overall (Rock bias is common)
   - MarkovPredictor           : people's next move depends on their last move
   - Markov2Predictor          : people's next move depends on their last TWO moves
-  - WinStayLoseShiftPredictor : people repeat after winning, switch after losing
+  - OutcomeReactionPredictor  : people react to winning/losing by staying or shifting --
+                                learned per-outcome, since not everyone is the classic
+                                win-stay/lose-shift direction (some are the opposite)
   - AntiPatternPredictor      : people deliberately avoid repeats when "trying to be random"
 
 The Q-learning meta-agent in agent.py learns, live, which of these predictors
@@ -119,23 +121,39 @@ class Markov2Predictor(BasePredictor):
         return random.choice(best)
 
 
-class WinStayLoseShiftPredictor(BasePredictor):
-    """Classic behavioral-economics tell: people repeat winning moves, and switch
-    away from moves that just lost, more often than pure chance would predict."""
-    name = "Win-Stay / Lose-Shift"
+class OutcomeReactionPredictor(BasePredictor):
+    """Generalizes the classic 'win-stay/lose-shift' tell instead of assuming
+    its direction. Real players don't all react the same way to winning and
+    losing: some repeat after winning and switch after losing (textbook
+    win-stay/lose-shift); others get stubborn and repeat after LOSING, on a
+    gambler's-fallacy "it'll work this time" instinct; others switch even
+    after winning, trying to look unpredictable. This predictor tracks, per
+    outcome (win/loss/tie), how often THIS player actually stays vs. shifts,
+    and bets on whichever tendency it has actually observed -- so it catches
+    any of these reaction styles, not just the textbook one."""
+    name = "Outcome Reaction"
+
+    def __init__(self):
+        self.counts = {r: {"stay": 0, "shift": 0} for r in ("human", "agent", "tie")}
+
+    def update(self, history):
+        if len(history) >= 2:
+            prev, curr = history[-2], history[-1]
+            stayed = curr["human"] == prev["human"]
+            self.counts[prev["result"]]["stay" if stayed else "shift"] += 1
 
     def predict(self, history):
         if not history:
             return random.choice(MOVES)
         last = history[-1]
-        if last["result"] == "human":  # the human just won -> likely to stay
+        c = self.counts[last["result"]]
+        total = c["stay"] + c["shift"]
+        if total == 0:
+            return random.choice(MOVES)
+        if c["stay"] / total >= 0.5:
             return last["human"]
-        elif last["result"] == "agent":  # the human just lost -> likely to shift
-            others = [m for m in MOVES if m != last["human"]]
-            return random.choice(others)
-        else:  # tie -> mild tendency to switch
-            others = [m for m in MOVES if m != last["human"]]
-            return random.choice(others)
+        others = [m for m in MOVES if m != last["human"]]
+        return random.choice(others)
 
 
 class AntiPatternPredictor(BasePredictor):
@@ -164,6 +182,6 @@ def build_predictor_bank():
         FrequencyPredictor(),
         MarkovPredictor(),
         Markov2Predictor(),
-        WinStayLoseShiftPredictor(),
+        OutcomeReactionPredictor(),
         AntiPatternPredictor(),
     ]

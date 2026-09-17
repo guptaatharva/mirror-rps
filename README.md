@@ -40,7 +40,7 @@ real signal, not cheating.
 | Frequency | Overall move bias (e.g. over-playing Rock) |
 | Markov (last-move) | P(next move \| last move) |
 | Markov (last-2) | P(next move \| last two moves) — longer, more deliberate habits |
-| Win-Stay / Lose-Shift | Repeats after winning, switches after losing |
+| Outcome Reaction | Learns your stay/shift tendency after a win vs. a loss *separately* — catches classic win-stay/lose-shift, its mirror image (lose-stay/win-shift), or either-direction repeaters, instead of assuming one fixed direction |
 | Anti-Repeat | Over-corrected "trying to look random" cycling |
 
 The Q-learning layer does **not** know in advance which predictor is best —
@@ -52,7 +52,7 @@ genuinely reinforcement-learning part of the system.
 Each played session is reduced to a 6-dimensional behavioral feature vector
 (move frequencies, stay-after-win rate, shift-after-loss rate, repeat rate).
 Both `evaluate.py` (offline) and the **Simulation Lab** tab (live, in-app)
-share the same feature/PCA code (`analysis.py`), run many sessions across 5
+share the same feature/PCA code (`analysis.py`), run many sessions across 6
 player archetypes, standardize the features, and project to 2 components.
 The resulting plot shows genuine visual separation between archetypes — this
 justifies PCA's use here: it reveals real structure in a multi-dimensional
@@ -62,9 +62,9 @@ where the session you just ran landed on that map.
 
 ## 4. Evaluation & algorithm comparison
 
-`evaluate.py` compares, over 200-round games x 15 trials, against 5
-simulated archetypes (random, rock-biased, win-stay/lose-shift, cyclic,
-anti-repeat):
+`evaluate.py` compares, over 200-round games x 15 trials, against 6
+simulated archetypes (random, rock-biased, win-stay/lose-shift,
+lose-stay/win-shift, cyclic, anti-repeat):
 
 - **MirrorAgent** (full Q-learning ensemble)
 - **UCB1BanditAgent** (contextual UCB1 over the same predictor actions)
@@ -92,12 +92,22 @@ Outputs (in `results/` after running `evaluate.py`):
 (including MirrorAgent) sits at ~33% — this is expected and correct, and is
 worth stating explicitly in your report/viva as proof the system isn't
 "cheating." Against every realistic (non-uniform) archetype, MirrorAgent
-beats the 33% baseline substantially. A single specialist predictor
-sometimes outperforms the ensemble on the archetype it was designed for
-(e.g. Markov vs. the cyclic archetype, ~76% vs. the ensemble's ~62%) — a
-good, honest talking point about the exploration/generalization trade-off of
-the Q-learning meta-layer versus a hand-picked specialist, and about the
-cost of ε-exploration the specialist doesn't pay.
+beats the 33% baseline substantially (all p < 0.002, most far smaller). A
+single specialist predictor sometimes outperforms the ensemble on the
+archetype it was designed for (e.g. Markov vs. the cyclic archetype, ~76% vs.
+the ensemble's ~63%) — a good, honest talking point about the
+exploration/generalization trade-off of the Q-learning meta-layer versus a
+hand-picked specialist, and about the cost of ε-exploration the specialist
+doesn't pay.
+
+**Why the `Outcome Reaction` predictor matters specifically:** it doesn't
+assume win-stay/lose-shift is the direction — it learns each player's actual
+stay-after-win vs. stay-after-loss rate separately. The `lose_stay_win_shift`
+archetype (repeats after losing, switches after winning — the mirror image of
+the textbook bias) proves this: MirrorAgent still reaches 51.9% there
+(p ≈ 3×10⁻²²), and `Outcome Reaction` alone reaches 64.8%, essentially
+matching its performance on the *textbook* direction. A predictor hardcoded to
+assume win-stay/lose-shift would have been actively wrong against this player.
 
 ## 5. Real-time GUI
 
@@ -124,7 +134,7 @@ cost of ε-exploration the specialist doesn't pay.
   the averaged win-rate curve against the 33% baseline plus an exact
   binomial significance test
 - The session is plotted as a ★ on the PCA behavioral map against a
-  freshly-sampled cloud of all 5 archetypes
+  freshly-sampled cloud of all 6 archetypes
 
 **ℹ️ About** — problem statement, RL setup, predictor table, rubric mapping,
 and (if `evaluate.py` has been run) the offline report figures inline.

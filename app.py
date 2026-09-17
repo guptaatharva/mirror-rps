@@ -363,7 +363,7 @@ with tab_sim:
 
         st.write("---")
         st.markdown("**This session, projected onto the behavioral PCA map**")
-        st.caption("The session you just ran is added as a ★ marker over a freshly-sampled cloud of the 5 archetypes' behavioral fingerprints.")
+        st.caption("The session you just ran is added as a ★ marker over a freshly-sampled cloud of the 6 archetypes' behavioral fingerprints.")
         feature_rows, cloud_labels = [], []
         for arche_name, arche_fn in ARCHETYPES.items():
             for _ in range(12):
@@ -426,7 +426,7 @@ dataset, no pretraining), and exploits it to win above the 33% random-chance bas
             ("Frequency", "Overall move bias (e.g. over-playing Rock)"),
             ("Markov (last-move)", "P(next move | last move)"),
             ("Markov (last-2)", "P(next move | last two moves) — longer, more deliberate habits"),
-            ("Win-Stay / Lose-Shift", "Repeats after winning, switches after losing"),
+            ("Outcome Reaction", "Learns YOUR stay/shift tendency after a win vs. after a loss separately — catches classic win-stay/lose-shift, its opposite (lose-stay), or either-direction repeaters"),
             ("Anti-Repeat", "Over-corrected 'trying to look random' cycling"),
         ],
         columns=["Predictor", "Behavioral tell it detects"],
@@ -456,7 +456,7 @@ dataset, no pretraining), and exploits it to win above the 33% random-chance bas
     st.subheader("Evaluation & algorithm comparison")
     st.markdown(
         """
-`evaluate.py` compares, over 200-round games × 15 trials, against 5 simulated archetypes
+`evaluate.py` compares, over 200-round games × 15 trials, against 6 simulated archetypes
 (random, rock-biased, win-stay/lose-shift, cyclic, anti-repeat):
 
 - **MirrorAgent** (full Q-learning ensemble)

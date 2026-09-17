@@ -41,6 +41,25 @@ def win_stay_lose_shift_player(history):
         return random.choice(MOVES)
 
 
+def lose_stay_player(history):
+    """The mirror image of win-stay/lose-shift: some players get 'stubborn'
+    after a loss on a gambler's-fallacy instinct ("it'll work this time"), and
+    switch away from a move that just won, trying not to look predictable
+    even when they're winning. Exists to prove the agent's Outcome Reaction
+    predictor learns the direction from the player instead of assuming the
+    textbook one."""
+    if not history:
+        return random.choice(MOVES)
+    last = history[-1]
+    if last["result"] == "agent":
+        return last["human"] if random.random() < 0.75 else random.choice(MOVES)
+    elif last["result"] == "human":
+        others = [m for m in MOVES if m != last["human"]]
+        return random.choice(others) if random.random() < 0.7 else last["human"]
+    else:
+        return random.choice(MOVES)
+
+
 def cyclic_player(history):
     """Cycles rock -> paper -> scissors -> rock ..., a very common
     'trying to look random but actually predictable' human pattern."""
@@ -66,6 +85,7 @@ ARCHETYPES = {
     "random": random_player,
     "rock_biased": rock_biased_player,
     "win_stay_lose_shift": win_stay_lose_shift_player,
+    "lose_stay_win_shift": lose_stay_player,
     "cyclic": cyclic_player,
     "anti_repeat": anti_repeat_player,
 }

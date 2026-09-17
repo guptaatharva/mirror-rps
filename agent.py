@@ -175,24 +175,43 @@ class MirrorAgent:
             return "Not enough rounds yet — still calibrating to how you play."
 
         moves = [h["human"] for h in self.history]
-        stay_after_win = win_rounds = shift_after_loss = loss_rounds = 0
+        stay_after_win = win_rounds = stay_after_loss = loss_rounds = 0
         for i in range(1, len(self.history)):
             prev, curr = self.history[i - 1], self.history[i]
+            stayed = curr["human"] == prev["human"]
             if prev["result"] == "human":
                 win_rounds += 1
-                stay_after_win += curr["human"] == prev["human"]
+                stay_after_win += stayed
             elif prev["result"] == "agent":
                 loss_rounds += 1
-                shift_after_loss += curr["human"] != prev["human"]
+                stay_after_loss += stayed
 
         trust = dict(zip([p.name for p in self.predictors], self._trust_scores()))
         leader = max(trust, key=trust.get)
-        if leader == "Win-Stay / Lose-Shift" and (win_rounds >= 2 or loss_rounds >= 2):
-            stay_pct = int(100 * stay_after_win / win_rounds) if win_rounds else 0
-            shift_pct = int(100 * shift_after_loss / loss_rounds) if loss_rounds else 0
-            return (f"You repeat your winning move {stay_pct}% of the time, and switch "
-                    f"away from a losing move {shift_pct}% of the time. That's not random "
-                    f"— that's a habit, and I'm using it.")
+        if leader == "Outcome Reaction" and (win_rounds >= 2 or loss_rounds >= 2):
+            stay_win_pct = int(100 * stay_after_win / win_rounds) if win_rounds else None
+            stay_loss_pct = int(100 * stay_after_loss / loss_rounds) if loss_rounds else None
+            win_leans_stay = stay_win_pct is not None and stay_win_pct >= 55
+            win_leans_shift = stay_win_pct is not None and stay_win_pct <= 45
+            loss_leans_stay = stay_loss_pct is not None and stay_loss_pct >= 55
+            loss_leans_shift = stay_loss_pct is not None and stay_loss_pct <= 45
+            if win_leans_stay and loss_leans_shift:
+                return (f"You repeat your winning move {stay_win_pct}% of the time, and switch "
+                        f"away from a losing move {100 - stay_loss_pct}% of the time — classic "
+                        "win-stay/lose-shift, and I'm using it.")
+            if loss_leans_stay and win_leans_shift:
+                return (f"You actually repeat a LOSING move {stay_loss_pct}% of the time — more "
+                        f"than you repeat a winning one ({stay_win_pct}%). That's a 'stick with "
+                        "it, it'll work eventually' habit, and I'm using it.")
+            if win_leans_stay and loss_leans_stay:
+                return (f"You tend to repeat your last move regardless of whether you won "
+                        f"({stay_win_pct}%) or lost ({stay_loss_pct}%) — a strong, consistent "
+                        "repeat habit, and I'm using it.")
+            if win_leans_shift and loss_leans_shift:
+                return ("You switch your move after winning AND after losing — you don't stick "
+                        "with anything for long, but that inconsistency is itself the pattern "
+                        "I'm using.")
+            return "Your reaction to winning vs. losing is mixed so far — still narrowing it down."
         if leader == "Frequency":
             counts = {m: moves.count(m) for m in MOVES}
             fav = max(counts, key=counts.get)
@@ -209,14 +228,19 @@ class MirrorAgent:
 
     # ---------- named opponent profiles ----------
 
+    # predictor instance attributes that hold learned state and need to
+    # survive a save_profile / load_profile round-trip.
+    _PREDICTOR_STATE_ATTRS = ("transitions", "counts")
+
     def to_dict(self):
         """Return JSON-safe state so a named opponent can be resumed later."""
         predictor_state = []
         for predictor in self.predictors:
-            predictor_state.append({
-                "name": predictor.name,
-                "transitions": getattr(predictor, "transitions", None),
-            })
+            entry = {"name": predictor.name}
+            for attr in self._PREDICTOR_STATE_ATTRS:
+                if hasattr(predictor, attr):
+                    entry[attr] = getattr(predictor, attr)
+            predictor_state.append(entry)
         return {
             "version": 2,
             "alpha": self.alpha,
@@ -257,8 +281,9 @@ class MirrorAgent:
         agent.losses = data.get("losses", 0)
         agent.ties = data.get("ties", 0)
         for predictor, saved in zip(agent.predictors, data.get("predictor_state", [])):
-            if saved.get("transitions") is not None and hasattr(predictor, "transitions"):
-                predictor.transitions = saved["transitions"]
+            for attr in cls._PREDICTOR_STATE_ATTRS:
+                if saved.get(attr) is not None and hasattr(predictor, attr):
+                    setattr(predictor, attr, saved[attr])
         return agent
 
     def save_profile(self, path):
